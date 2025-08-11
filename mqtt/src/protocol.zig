@@ -3,10 +3,10 @@
 
 const std = @import("std");
 
-pub const ProtocolError = error{InvalidControlPacket};
+pub const ProtocolError = error{InvalidFixedheader};
 
 /// 2.2.1 MQTT Control Packet type
-pub const ControlPacketType = enum(u4) {
+pub const FixedheaderType = enum(u4) {
     // reserved value 0, forbidden
     // RESERVED_0,
     /// client to server: request connection to server
@@ -58,37 +58,93 @@ pub const ControlFlags = struct {
     retain: bool,
 };
 
-pub const ControlPacket = struct { packet_type: ControlPacketType };
-pub const FixedHeader = struct {};
+pub const Fixedheader = struct { packet_type: FixedheaderType, flags: ControlFlags };
 
-fn parse_control_packet_type(byte: u8) !ControlPacketType {
+fn parse_fixed_header(byte: u8) !Fixedheader {
     const type_bits: u8 = byte >> 4;
 
-    switch (type_bits) {
-        1...14 => return @enumFromInt(type_bits),
+    const packet_type: FixedheaderType = switch (type_bits) {
+        1...14 => @enumFromInt(type_bits),
         else => {
             std.log.err("invalid mqtt control type {b} in {b}\n", .{ type_bits, byte });
-            return ProtocolError.InvalidControlPacket;
+            return ProtocolError.InvalidFixedheader;
         },
-    }
-}
+    };
 
-fn parse_control_packet(byte: u8) !ControlPacket {
-    const packet_type = try parse_control_packet_type(byte);
+    const qos: QoS = switch ((byte & 0b0110) >> 1) {
+        0...2 => |v| @enumFromInt(v),
+        else => |invalid| {
+            std.log.err("invalid mqtt quality of service {b} in {b}\n", .{ invalid, byte });
+            return ProtocolError.InvalidFixedheader;
+        },
+    };
 
-    return ControlPacket{ .packet_type = packet_type };
+    const dup_delivery: bool = (byte & 0b1000) != 0;
+    const retain: bool = (byte & 0b0001) != 0;
+
+    const flags = ControlFlags{
+        .duplicate_delivery = dup_delivery,
+        .quality_of_service = qos,
+        .retain = retain,
+    };
+
+    return Fixedheader{ .packet_type = packet_type, .flags = flags };
 }
 
 test "parse_control_packet(): control type from 4 msb bits" {
-    // const bits = 0x30;
-    // const packet = try parse_control_packet(bits);
-    // try std.testing.expectEqual(packet.packet_type, ControlPacketType.PUBLISH);
-
     for (1..15) |n| {
-        const byte: u8 = @intCast(n);
         // shift left because control bits are the second octet (high 4 msb)
-        const packet = try parse_control_packet(byte << 4);
-        const expected: ControlPacketType = @enumFromInt(n);
-        try std.testing.expectEqual(packet.packet_type, expected);
+        const byte: u8 = @intCast(n);
+        const packet = try parse_fixed_header(byte << 4);
+        const expected: FixedheaderType = @enumFromInt(n);
+        try std.testing.expectEqual(expected, packet.packet_type);
+    }
+}
+
+test "parse_control_packet(): can parse control duplicate_delivery and retain flags" {
+
+    // retain true
+    {
+        const packet = try parse_fixed_header(0b10000001);
+        try std.testing.expectEqual(true, packet.flags.retain);
+    }
+
+    // retain false
+    {
+        const packet = try parse_fixed_header(0b10000000);
+        try std.testing.expectEqual(false, packet.flags.retain);
+    }
+
+    // duplicate_delivery true
+    {
+        const packet = try parse_fixed_header(0b10001000);
+        try std.testing.expectEqual(true, packet.flags.duplicate_delivery);
+    }
+
+    // duplicate_delivery false
+    {
+        const packet = try parse_fixed_header(0b10000000);
+        try std.testing.expectEqual(false, packet.flags.duplicate_delivery);
+    }
+}
+
+test "parse_control_packet(): can parse control qos flags" {
+
+    // AT_MOST_ONCE
+    {
+        const packet = try parse_fixed_header(0b10000000);
+        try std.testing.expectEqual(QoS.AT_MOST_ONCE, packet.flags.quality_of_service);
+    }
+
+    // AT_LEAST_ONCE
+    {
+        const packet = try parse_fixed_header(0b10000010);
+        try std.testing.expectEqual(QoS.AT_LEAST_ONCE, packet.flags.quality_of_service);
+    }
+
+    // EXACTLY_ONCE
+    {
+        const packet = try parse_fixed_header(0b10000100);
+        try std.testing.expectEqual(QoS.EXACTLY_ONCE, packet.flags.quality_of_service);
     }
 }
