@@ -7,4 +7,5 @@ test {
     _ = @import("protocol.zig");
 
     std.testing.refAllDeclsRecursive(@This());
+    std.testing.log_level = .debug;
 }
