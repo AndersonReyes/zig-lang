@@ -213,6 +213,6 @@ test "parse_remaining_length_field multiple bytes" {
 }
 
 test "can parse variable header" {
-    const actual = parse_variable_header(&[2]u8{ 0x34, 0x12 });
+    const actual = parse_variable_header(&[2]u8{ 0x12, 0x34 });
     try std.testing.expectEqual(0x1234, actual.packet_identifier);
 }
