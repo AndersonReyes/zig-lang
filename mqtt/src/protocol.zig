@@ -89,6 +89,17 @@ fn parse_remaining_length_field(bytes: *const [4]u8) !usize {
     return value;
 }
 
+pub const VariableHeader = struct { packet_identifier: u16 };
+
+/// 2.3.1 parse variable header . Packet identifiers, 2 bytes
+fn parse_variable_header(bytes: *const [2]u8) VariableHeader {
+    // first byte is MSB bits and second byte is LSB bits
+    var id: u16 = bytes[0];
+    id <<= 8;
+    id |= bytes[1];
+    return .{ .packet_identifier = id };
+}
+
 /// fixed header contains at most 5 bytes.1 for the control packet and 4 for remaining length field.
 fn parse_fixed_header(bytes: *const [5]u8) !Fixedheader {
     const first_byte = bytes[0];
@@ -125,7 +136,7 @@ fn parse_fixed_header(bytes: *const [5]u8) !Fixedheader {
         .retain = retain,
     };
 
-    return Fixedheader{ .packet_type = packet_type, .flags = flags, .remaining_length = remaining_length };
+    return .{ .packet_type = packet_type, .flags = flags, .remaining_length = remaining_length };
 }
 
 test "parse_control_packet(): control type from 4 msb bits" {
@@ -199,4 +210,9 @@ test "parse_remaining_length_field multiple bytes" {
     // (8th bit) to 1.
     const actual: usize = try parse_remaining_length_field(&[4]u8{ 65 | 128, 2, 0, 0 });
     try std.testing.expectEqual(321, actual);
+}
+
+test "can parse variable header" {
+    const actual = parse_variable_header(&[2]u8{ 0x34, 0x12 });
+    try std.testing.expectEqual(0x1234, actual.packet_identifier);
 }
