@@ -1,6 +1,7 @@
 .zig-cache/
 zig-out/
 *.o
+*.wav
 
 
 # Byte-compiled / optimized / DLL files

@@ -31,7 +31,7 @@ pub const Wave = struct {
         self.values.deinit(self.allocator);
     }
 
-    pub fn initFromSinusoid(allocator: std.mem.Allocator, s: signal.Sinusoid, duration: comptime_float, start: comptime_int, framerate: comptime_int) !Wave {
+    pub fn initFromSignals(allocator: std.mem.Allocator, signals: []const signal.Signal, duration: comptime_float, start: comptime_int, framerate: comptime_int) !Wave {
         const n: comptime_int = @round(duration * @as(comptime_float, framerate));
         var time: [n]f64 = .{0.0} ** n;
 
@@ -42,17 +42,16 @@ pub const Wave = struct {
             time[i] = (f / framerate_f) + start_f;
         }
 
-        const values = s.evaluate(n, time);
+        const values = signal.Signal.evaluateMany(signals, n, time);
 
         return try init(allocator, &time, framerate, &values);
     }
 };
 
 test "init" {
-    var s = try signal.Sinusoid.init(std.testing.allocator, &[1]signal.Signal{signal.Signal.init(1.0, 1.0, 0.0)});
-    defer s.deinit();
+    const s = try signal.Signal.initCos(1.0, 1.0, 0.0);
 
-    var wave = try Wave.initFromSinusoid(std.testing.allocator, s, 1.0, 0.0, 2);
+    var wave = try Wave.initFromSignals(std.testing.allocator, .{s}, 1.0, 0.0, 2);
     defer wave.deinit();
 
     try std.testing.expectEqual(2, wave.framerate);
