@@ -69,6 +69,8 @@ pub const Wav = struct {
         for (data) |b| {
             try writer.interface.writeAll(std.mem.asBytes(&b));
         }
+
+        try writer.interface.flush();
     }
 };
 

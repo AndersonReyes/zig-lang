@@ -34,7 +34,7 @@ pub fn main() !void {
 
     try data.appendNTimes(allocator, 0, sinwave.values.items.len);
 
-    try sample.quantize(i16, sinwave.values.items, &data.items, @floatFromInt(std.math.maxInt(i16)));
+    try sample.quantize(allocator, i16, 1.0, sinwave.values.items, &data.items, std.math.maxInt(i16));
 
     var wav_file = wav.Wav.init(1, channels, sinwave.framerate, byterate, block_align, bits_per_sample);
     try wav_file.write(i16, p, data.items);
